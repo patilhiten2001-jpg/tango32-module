@@ -21,7 +21,7 @@ jobs:
         TOOLCHAIN_BIN=$GITHUB_WORKSPACE/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin
         echo "NDK_PATH=$GITHUB_WORKSPACE/android-ndk-r26b" >> $GITHUB_ENV
         
-        # Hardcoded tools ke liye symlinks
+        # Hardcoded tools symlinks
         ln -sf $TOOLCHAIN_BIN/llvm-nm $TOOLCHAIN_BIN/aarch64-linux-android-nm
         ln -sf $TOOLCHAIN_BIN/llvm-objcopy $TOOLCHAIN_BIN/aarch64-linux-android-objcopy
         ln -sf $TOOLCHAIN_BIN/llvm-objdump $TOOLCHAIN_BIN/aarch64-linux-android-objdump
@@ -29,11 +29,15 @@ jobs:
 
     - name: Organize Zip Files to Root Folder
       run: |
-        # Agar koi zip file hai toh use extract karega aur saari files ko root par le aayega
         find . -name "*.zip" -exec unzip -o {} \;
-        # Subfolder ke andar ki files ko root workspace me move karna taaki headers mil sakein
         find . -maxdepth 3 -name "tango32.c" -exec cp -r $(dirname {})/* $GITHUB_WORKSPACE/ \;
-        ls -la $GITHUB_WORKSPACE
+
+    - name: Patch Code for Android Kernel 6.1
+      run: |
+        # Android 6.1 kernel compatibility ke liye macro fix force karna
+        # Isse source code direct GKI 6.1 structures ko emulate karne lagega
+        sed -i 's/#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)/#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)/g' $GITHUB_WORKSPACE/tango32.c
+        echo "Code patched successfully for Kernel 6.1!"
 
     - name: Download Android 14 Kernel Headers (v6.1)
       run: |
@@ -58,7 +62,7 @@ jobs:
       run: |
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
         
-        # Final Module Compilation (Ab workspace me tango32.h mil jayegi)
+        # Final Module Compilation
         make -j2 -C kernel-src M=$GITHUB_WORKSPACE \
           ARCH=arm64 \
           CROSS_COMPILE=aarch64-linux-android- \
