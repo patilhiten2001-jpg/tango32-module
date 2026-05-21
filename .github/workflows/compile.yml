@@ -14,19 +14,26 @@ jobs:
     - name: Set up Android NDK & Clang Symlinks
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison flex libssl-dev libelf-dev git gawk
+        sudo apt-get install -y bc bison flex libssl-dev libelf-dev git gawk unzip
         wget https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
         unzip -q android-ndk-r26b-linux.zip
         
-        # Tools path set karna
         TOOLCHAIN_BIN=$GITHUB_WORKSPACE/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin
         echo "NDK_PATH=$GITHUB_WORKSPACE/android-ndk-r26b" >> $GITHUB_ENV
         
-        # CRUCIAL FIX: Hardcoded tools ke liye symlinks banana taaki kernel scripts fail na ho
+        # Hardcoded tools ke liye symlinks
         ln -sf $TOOLCHAIN_BIN/llvm-nm $TOOLCHAIN_BIN/aarch64-linux-android-nm
         ln -sf $TOOLCHAIN_BIN/llvm-objcopy $TOOLCHAIN_BIN/aarch64-linux-android-objcopy
         ln -sf $TOOLCHAIN_BIN/llvm-objdump $TOOLCHAIN_BIN/aarch64-linux-android-objdump
         ln -sf $TOOLCHAIN_BIN/llvm-strip $TOOLCHAIN_BIN/aarch64-linux-android-strip
+
+    - name: Organize Zip Files to Root Folder
+      run: |
+        # Agar koi zip file hai toh use extract karega aur saari files ko root par le aayega
+        find . -name "*.zip" -exec unzip -o {} \;
+        # Subfolder ke andar ki files ko root workspace me move karna taaki headers mil sakein
+        find . -maxdepth 3 -name "tango32.c" -exec cp -r $(dirname {})/* $GITHUB_WORKSPACE/ \;
+        ls -la $GITHUB_WORKSPACE
 
     - name: Download Android 14 Kernel Headers (v6.1)
       run: |
@@ -37,10 +44,10 @@ jobs:
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
         cd kernel-src
         
-        # GKI Defconfig with full LLVM suite
+        # GKI Configuration
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- LLVM=1 gki_defconfig
         
-        # Disable BTF parsing to prevent extra resource compilation crashes
+        # Disable BTF parsing
         ./scripts/config --disable CONFIG_DEBUG_INFO_BTF
         
         # Core scripts preparation
@@ -51,7 +58,7 @@ jobs:
       run: |
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
         
-        # Final Module Compilation
+        # Final Module Compilation (Ab workspace me tango32.h mil jayegi)
         make -j2 -C kernel-src M=$GITHUB_WORKSPACE \
           ARCH=arm64 \
           CROSS_COMPILE=aarch64-linux-android- \
