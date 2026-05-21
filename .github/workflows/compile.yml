@@ -1,7 +1,7 @@
 name: Build Tango32 Android Kernel Module
 
 on:
-  workflow_dispatch: # Isse aap jab chahein button daba kar build start kar sakte hain
+  workflow_dispatch: # Isse aap button daba kar build start kar sakte hain
 
 jobs:
   build:
@@ -14,8 +14,8 @@ jobs:
     - name: Set up Android NDK & Clang
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison flex libssl-dev libelf-dev git layoutdump
-        # Download Android NDK (r26b or similar supporting LLVM Clang)
+        sudo apt-get install -y bc bison flex libssl-dev libelf-dev git
+        # Download Android NDK r26b supporting LLVM Clang
         wget https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
         unzip -q android-ndk-r26b-linux.zip
         echo "NDK_PATH=$GITHUB_WORKSPACE/android-ndk-r26b" >> $GITHUB_ENV
@@ -26,7 +26,7 @@ jobs:
         git clone --depth=1 https://android.googlesource.com/kernel/common -b android14-6.1 kernel-src
         cd kernel-src
         # Default configuration generate karna module build karne ke liye
-        make ARCH=arm64 gki_defconfig modules_prepare
+        make ARCH=arm64 defconfig
 
     - name: Compile Tango32 Module
       run: |
@@ -42,7 +42,7 @@ jobs:
           modules
 
     - name: Upload Compiled Module (.ko)
-      uses: actions/artifacts@v4
+      uses: actions/upload-artifact@v4
       with:
         name: tango32-android14-kernel6.1
         path: tango32.ko
