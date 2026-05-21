@@ -11,13 +11,22 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set up Android NDK & Clang
+    - name: Set up Android NDK & Clang Symlinks
       run: |
         sudo apt-get update
         sudo apt-get install -y bc bison flex libssl-dev libelf-dev git gawk
         wget https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
         unzip -q android-ndk-r26b-linux.zip
+        
+        # Tools path set karna
+        TOOLCHAIN_BIN=$GITHUB_WORKSPACE/android-ndk-r26b/toolchains/llvm/prebuilt/linux-x86_64/bin
         echo "NDK_PATH=$GITHUB_WORKSPACE/android-ndk-r26b" >> $GITHUB_ENV
+        
+        # CRUCIAL FIX: Hardcoded tools ke liye symlinks banana taaki kernel scripts fail na ho
+        ln -sf $TOOLCHAIN_BIN/llvm-nm $TOOLCHAIN_BIN/aarch64-linux-android-nm
+        ln -sf $TOOLCHAIN_BIN/llvm-objcopy $TOOLCHAIN_BIN/aarch64-linux-android-objcopy
+        ln -sf $TOOLCHAIN_BIN/llvm-objdump $TOOLCHAIN_BIN/aarch64-linux-android-objdump
+        ln -sf $TOOLCHAIN_BIN/llvm-strip $TOOLCHAIN_BIN/aarch64-linux-android-strip
 
     - name: Download Android 14 Kernel Headers (v6.1)
       run: |
@@ -28,27 +37,25 @@ jobs:
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
         cd kernel-src
         
-        # 1. Full Android Toolchain LLVM wrapper variables define kiye hain taaki 'nm failed' error na aaye
-        MAKE_ARGS="ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld NM=llvm-nm OBJCOPY=llvm-objcopy"
+        # GKI Defconfig with full LLVM suite
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- LLVM=1 gki_defconfig
         
-        # 2. GKI Defconfig generate karna
-        make $MAKE_ARGS gki_defconfig
-        
-        # 3. CRUCIAL: BTF debugging ko disable karna taaki resolve_btfids compile na ho aur time/crash bache
+        # Disable BTF parsing to prevent extra resource compilation crashes
         ./scripts/config --disable CONFIG_DEBUG_INFO_BTF
         
-        # 4. Kernel scripts aur modules prepare karna 2 CPU cores ke sath
-        make -j2 $MAKE_ARGS scripts
-        make -j2 $MAKE_ARGS modules_prepare
+        # Core scripts preparation
+        make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- LLVM=1 scripts
+        make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- LLVM=1 modules_prepare
 
     - name: Compile Tango32 Module
       run: |
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
-        MAKE_ARGS="ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld NM=llvm-nm OBJCOPY=llvm-objcopy"
         
-        # Module compilation step with full toolchain variables
+        # Final Module Compilation
         make -j2 -C kernel-src M=$GITHUB_WORKSPACE \
-          $MAKE_ARGS \
+          ARCH=arm64 \
+          CROSS_COMPILE=aarch64-linux-android- \
+          LLVM=1 \
           CONFIG_TANGO32=m \
           modules
 
