@@ -22,17 +22,22 @@ jobs:
 
     - name: Download Android 14 Kernel Headers (v6.1)
       run: |
-        # Android GKI 6.1 kernel headers fetch karna compilation ke liye zaroori hai
+        # Android GKI 6.1 kernel headers fetch karna
         git clone --depth=1 https://android.googlesource.com/kernel/common -b android14-6.1 kernel-src
+
+    - name: Configure Kernel with Clang
+      run: |
+        export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
         cd kernel-src
-        # Default configuration generate karna module build karne ke liye
-        make ARCH=arm64 defconfig
+        
+        # GKI config taiyar karna Clang settings ke sath taaki GCC flags na aayein
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld gki_defconfig
 
     - name: Compile Tango32 Module
       run: |
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
         
-        # Kernel module build command pointing to Android 14 kernel src
+        # Kernel module compile karna
         make -C kernel-src M=$GITHUB_WORKSPACE \
           ARCH=arm64 \
           CROSS_COMPILE=aarch64-linux-android- \
