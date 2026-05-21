@@ -21,7 +21,6 @@ jobs:
 
     - name: Download Android 14 Kernel Headers (v6.1)
       run: |
-        # --depth=1 aur --single-branch se faltu git history download nahi hogi, space/RAM bachegi
         git clone --depth=1 --single-branch https://android.googlesource.com/kernel/common -b android14-6.1 kernel-src
 
     - name: Configure and Prepare Kernel Headers
@@ -29,23 +28,27 @@ jobs:
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
         cd kernel-src
         
-        # 1. GKI Defconfig generate karna
-        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld gki_defconfig
+        # 1. Full Android Toolchain LLVM wrapper variables define kiye hain taaki 'nm failed' error na aaye
+        MAKE_ARGS="ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld NM=llvm-nm OBJCOPY=llvm-objcopy"
         
-        # 2. -j2 use karke sirf 2 CPU cores allow kiye hain taaki RAM full na ho aur Error 143 na aaye
-        make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld scripts
-        make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld modules_prepare
+        # 2. GKI Defconfig generate karna
+        make $MAKE_ARGS gki_defconfig
+        
+        # 3. CRUCIAL: BTF debugging ko disable karna taaki resolve_btfids compile na ho aur time/crash bache
+        ./scripts/config --disable CONFIG_DEBUG_INFO_BTF
+        
+        # 4. Kernel scripts aur modules prepare karna 2 CPU cores ke sath
+        make -j2 $MAKE_ARGS scripts
+        make -j2 $MAKE_ARGS modules_prepare
 
     - name: Compile Tango32 Module
       run: |
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+        MAKE_ARGS="ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld NM=llvm-nm OBJCOPY=llvm-objcopy"
         
-        # Module compilation step
+        # Module compilation step with full toolchain variables
         make -j2 -C kernel-src M=$GITHUB_WORKSPACE \
-          ARCH=arm64 \
-          CROSS_COMPILE=aarch64-linux-android- \
-          CC=clang \
-          LD=ld.lld \
+          $MAKE_ARGS \
           CONFIG_TANGO32=m \
           modules
 
