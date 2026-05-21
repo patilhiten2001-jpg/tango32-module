@@ -14,7 +14,8 @@ jobs:
     - name: Set up Android NDK & Clang
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison flex libssl-dev libelf-dev git awk
+        # 'awk' ki jagah 'gawk' use kiya hai jo real package hai
+        sudo apt-get install -y bc bison flex libssl-dev libelf-dev git gawk
         # Download Android NDK r26b supporting LLVM Clang
         wget https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
         unzip -q android-ndk-r26b-linux.zip
@@ -33,7 +34,10 @@ jobs:
         # 1. Base Android GKI Configuration generate karna
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld gki_defconfig
         
-        # 2. CRUCIAL: Missing headers (jaise asm-offsets.h) aur scripts ko build karna module compilation ke liye
+        # 2. Kernel scripts aur host tools ko compile karna (yeh compiler errors ko rokega)
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld scripts
+        
+        # 3. Missing headers aur assembly files (asm-offsets.h) ko taiyar karna
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld modules_prepare
 
     - name: Compile Tango32 Module
