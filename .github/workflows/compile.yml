@@ -1,7 +1,7 @@
 name: Build Tango32 Android Kernel Module
 
 on:
-  workflow_dispatch: # Isse aap button daba kar build start kar sakte hain
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,38 +14,34 @@ jobs:
     - name: Set up Android NDK & Clang
       run: |
         sudo apt-get update
-        # 'awk' ki jagah 'gawk' use kiya hai jo real package hai
         sudo apt-get install -y bc bison flex libssl-dev libelf-dev git gawk
-        # Download Android NDK r26b supporting LLVM Clang
         wget https://dl.google.com/android/repository/android-ndk-r26b-linux.zip
         unzip -q android-ndk-r26b-linux.zip
         echo "NDK_PATH=$GITHUB_WORKSPACE/android-ndk-r26b" >> $GITHUB_ENV
 
     - name: Download Android 14 Kernel Headers (v6.1)
       run: |
-        # Android GKI 6.1 kernel headers fetch karna
-        git clone --depth=1 https://android.googlesource.com/kernel/common -b android14-6.1 kernel-src
+        # --depth=1 aur --single-branch se faltu git history download nahi hogi, space/RAM bachegi
+        git clone --depth=1 --single-branch https://android.googlesource.com/kernel/common -b android14-6.1 kernel-src
 
     - name: Configure and Prepare Kernel Headers
       run: |
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
         cd kernel-src
         
-        # 1. Base Android GKI Configuration generate karna
+        # 1. GKI Defconfig generate karna
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld gki_defconfig
         
-        # 2. Kernel scripts aur host tools ko compile karna (yeh compiler errors ko rokega)
-        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld scripts
-        
-        # 3. Missing headers aur assembly files (asm-offsets.h) ko taiyar karna
-        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld modules_prepare
+        # 2. -j2 use karke sirf 2 CPU cores allow kiye hain taaki RAM full na ho aur Error 143 na aaye
+        make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld scripts
+        make -j2 ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld modules_prepare
 
     - name: Compile Tango32 Module
       run: |
         export PATH=$NDK_PATH/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
         
-        # Kernel module compile karna fully prepared headers ke sath
-        make -C kernel-src M=$GITHUB_WORKSPACE \
+        # Module compilation step
+        make -j2 -C kernel-src M=$GITHUB_WORKSPACE \
           ARCH=arm64 \
           CROSS_COMPILE=aarch64-linux-android- \
           CC=clang \
